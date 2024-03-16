@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en" >
+<head>
+  <meta charset="UTF-8">
+  <title>The REPP App</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="stylesheet" type="text/css" href="./style.css">
+  <script src="build/tracking-min.js"></script>
+  <script src='https://jeromeetienne.github.io/AR.js/three.js/examples/marker-training/threex-arpatternfile.js'></script>
+  <script src="https://trackingjs.com/bower/tracking.js/build/tracking-min.js"></script>
+  <script src="https://trackingjs.com/bower/dat-gui/build/dat.gui.min.js"></script>
+  <script src="https://www.dukelearntoprogram.com/course1/common/js/image/SimpleImage.js" ></script>
+  <style>
+    #canvas {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      margin: -200px 0 0 -200px;
+    }
+</style>
+</head>
+<body>
+    <h1>Features Tracking for Web-based AR Application </h1>
+    <input type="file" id="fileInput" onchange="upload()">  <!-- Upload Image -->
+    <div id="imageContainer1"><canvas class="img-fluid" id="can1"></canvas></div>
+    <button id="grayscaleButton" onclick="grayscaleImage()">Generate Grayscale</button>   <!-- Greyscale Image -->
+    <div id="imageContainer2"><canvas class="img-fluid" id="can2"></canvas></div>
+    <button id="featuresButton" onclick="featureDetection()">Generate Features</button> <!-- Feature Image -->
+    <div id="imageContainer3"><canvas class="img-fluid" id="can3"></canvas></div>
+    <div id="imageContainer4">Marker</div>
+    <button id="patternButton">Save Pattern</button> <!-- Pattern -->
+    <button id="markerButton">Save Marker</button> <!-- Marker -->
+    <div><a href="ar.html">Test AR</a></div>  <!-- AR Camera -->
+
+    <script src="assets/js/jquery.min.js"></script>
+    <script src="assets/js/bs-init.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/aos/2.2.0/aos.js"></script>
+    <script>
+      var image = null;
+      var innerImageURL = null;
+      var fullMarkerURL = null;
+
+      // Handle image upload
+      function upload()
+      {
+          var fileinput = document.getElementById("fileInput");
+          image = new SimpleImage(fileinput);
+
+          var canvas = document.getElementById("can1");
+          image.drawTo(canvas);
+      }
+
+      document.querySelector('#fileInput').addEventListener('change', function(){
+          var file = this.files[0];
+          imageName = file.name
+          imageName = imageName.substring(0, imageName.lastIndexOf('.')) || imageName
+
+          var reader = new FileReader();
+          reader.onload = function(event){
+              innerImageURL = event.target.result
+              updateFullMarkerImage()
+          };
+          reader.readAsDataURL(file);
+      })
+
+      // Generate image grayscale
+      function grayscaleImage()
+      {
+          if (image == null)
+          {
+              alert('No Image Uploaded!');
+          }
+          else
+          {
+              for (var pixel of image.values()) {
+              var avg = (pixel.getRed()+pixel.getGreen()+pixel.getBlue())/3;
+              pixel.setRed(avg);
+              pixel.setGreen(avg);
+              pixel.setBlue(avg);
+              }
+
+              var canvas = document.getElementById("can2");
+              image.drawTo(canvas);
+          }
+      }
+
+      // Generate image features
+      var gui = new dat.GUI();
+
+      function featureDetection()
+      {
+          window.fastThreshold = 10;
+          var canvas = document.getElementById("can3");
+          var context = canvas.getContext('2d');
+          var image = document.getElementById('can2');
+          var width = image.clientWidth;
+          var height = image.clientHeight;
+
+          canvas.width = width;
+          canvas.height = height;
+
+          var findFeature = function() {
+              tracking.Fast.THRESHOLD = window.fastThreshold;;
+              context.drawImage(image, 0, 0, width, height);
+
+              var imageData = context.getImageData(0, 0, width, height);
+              var gray = tracking.Image.grayscale(imageData.data, width, height);
+              var corners = tracking.Fast.findCorners(gray, width, height);
+
+              for (var i = 0; i < corners.length; i += 2) {
+              context.fillStyle = '#ff0000';
+              context.fillRect(corners[i], corners[i + 1], 3, 3);
+              }
+          };
+
+          findFeature();
+
+          gui.add(window, 'fastThreshold', 0, 100).onChange(findFeature);
+      }
+
+      // display marker
+      function updateFullMarkerImage(){
+          var patternRatio = 50/100
+          var imageSize = 512
+          var borderColor = 'black'
+
+          THREEx.ArPatternFile.buildFullMarker(innerImageURL, patternRatio, imageSize, borderColor, function onComplete(markerUrl){
+              fullMarkerURL = markerUrl
+
+              var fullMarkerImage = document.createElement('img')
+              fullMarkerImage.setAttribute('class', "img-fluid");
+              fullMarkerImage.src = fullMarkerURL
+
+              var container = document.querySelector('#imageContainer4')
+              while (container.firstChild) container.removeChild(container.firstChild);
+              container.appendChild(fullMarkerImage)
+          })
+      }
+
+      // download pattern
+      document.querySelector('#patternButton').addEventListener('click', function(){
+          if( innerImageURL === null ){
+              alert('No Image Uploaded!')
+              return
+          }
+          console.assert(innerImageURL)
+          THREEx.ArPatternFile.encodeImageURL(innerImageURL, function onComplete(patternFileString){
+              THREEx.ArPatternFile.triggerDownload(patternFileString, "pattern-" + ("marker") + ".patt")
+          })
+      })
+
+      // download marker
+      markerButton.addEventListener('click', function () {
+          if (innerImageURL) {
+            var link = document.createElement('a');
+            link.href = fullMarkerURL;
+
+            // Extract the file name from the uploaded image
+            var originalFileName = fileInput.files[0].name;
+
+            // Create a new file name for the marker
+            var markerFileName = originalFileName.replace(/\.[^/.]+$/, "") + "_marker.png";
+
+            link.download = markerFileName;
+            link.click();
+          }
+        });
+
+    </script>
+</body>
+</html>
